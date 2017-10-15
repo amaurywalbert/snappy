@@ -5,90 +5,77 @@
 import snap, datetime, sys, time, json, os, os.path, shutil, time, random, math
 import numpy as np
 from math import*
+# Script auxiliar para cálculos matemáticos que deve estar no mesmo diretório deste aqui.
+import calc
 reload(sys)
 sys.setdefaultencoding('utf-8')
 
 ######################################################################################################################################################################
-##		Status - Versão 1 - Script para gerar estatísticas de um conjunto de redes-ego
+##		Status - Versão 1 - Script para gerar propriedades estruturais das redes-ego
 ## 
 ######################################################################################################################################################################
 
 
 ######################################################################################################################################################################
 #
-# Cálculos iniciais sobre o conjunto de dados lidos.
-#
-######################################################################################################################################################################
-def calcular(valores=None):
-	calculos = {}
-	if valores:
-		if valores.__class__.__name__ == 'list' and calculos.__class__.__name__ == 'dict':
-			def somar(valores):
-				soma = 0
-				for v in valores:
-					soma += v
-				return soma
- 
-			def media(valores):
-				soma = somar(valores)
-				qtd_elementos = len(valores)
-				media = soma / float(qtd_elementos)
-				return media
- 
- 			def variancia(valores):
- 				_media = media(valores)
- 				soma = 0
- 				_variancia = 0
- 
- 				for valor in valores:
- 					soma += math.pow( (valor - _media), 2)
- 					_variancia = soma / float( len(valores) )
- 					return _variancia
- 
- 			def desvio_padrao(valores):
- 				return math.sqrt( variancia(valores) )
-
-			calculos['soma'] = somar(valores)
-			calculos['media'] = media(valores)
-			calculos['variancia'] = variancia(valores)
-			calculos['desvio_padrao'] = desvio_padrao(valores)
-			return calculos
-
-######################################################################################################################################################################
-#
 # Armazenar as propriedades do dataset
 #
 ######################################################################################################################################################################
-def statistics(dataset_dir,output_dir,net):
+def statistics(dataset_dir,output_dir,net,isdir):
 	print("\n######################################################################\n")
 	print ("Dataset statistics - " +str(dataset_dir))
+	IsDir=isdir
+	n = []																										# Média dos nós por rede-ego
+	e = []																										# Média das arestas por rede-ego	
+	d = []																										# Média dos diametros por rede-ego
+	cc = []																										# Média dos coeficientes de clusterings por rede-ego
+	bc_n = []																									# média de betweenness centrality dos nós	
+	bc_e = []																									# média de betweenness centrality das arestas
 	
-	n = []
-	e = []
+	i = 0
 	for file in os.listdir(dataset_dir):
+		i+=1 
+		print ("Calculando propriedades para o ego %d..." % (i))
+		
 		G = snap.LoadEdgeList(snap.PNGraph, dataset_dir+file, 0, 1)							   # load from a text file
-		n.append(G.GetNodes())
-		e.append(G.GetEdges())
-	nodes = calcular(n)
-	edges = calcular(e)
+		n.append(G.GetNodes())																				# Numero de vertices
+		e.append(G.GetEdges())																				# Numero de arestas
+		d.append(snap.GetBfsFullDiam(G, 100, IsDir))													# get diameter of G
+#		cc.append(snap.GetClustCf(G))																		# clustering coefficient of G											
+
+		Nodes = snap.TIntFltH()
+		Edges = snap.TIntPrFltH()
+		snap.GetBetweennessCentr(G, Nodes, Edges, 1.0, IsDir)
+		_bc_n = []
+		_bc_e = []
+		for node in Nodes:
+			_bc_n.append(Nodes[node])
+		for edge in Edges:
+			_bc_e.append(Edges[edge])
+		result = calc.calcular(_bc_n)
+		bc_n.append(result['media'])
+		result = calc.calcular(_bc_e)
+		bc_e.append(result['media'])	
+
+
+#####################################################################################			
+	N = calc.calcular_full(n)
+	E = calc.calcular_full(e)
+	D = calc.calcular_full(d)
+	BC_N = calc.calcular_full(bc_n)
+	BC_E = calc.calcular_full(bc_e)
 	print("\n######################################################################\n")	
-	print ("NET: %s -- Nodes: %d -- Média: %5.3f -- Var:%5.3f -- Des. Padrão: %5.3f"% (net,nodes['soma'],nodes['media'],nodes['variancia'],nodes['desvio_padrao']))
-	print ("NET: %s -- Edges: %d -- Média: %5.3f -- Var:%5.3f -- Des. Padrão: %5.3f"% (net,edges['soma'],edges['media'],edges['variancia'],edges['desvio_padrao']))	
+	print ("NET: %s -- Egos-net: %d" % (net,len(n)))
+	print ("Nodes: Média: %5.3f -- Var:%5.3f -- Des. Padrão: %5.3f"% (N['media'],N['variancia'],N['desvio_padrao']))
+	print ("Edges: Média: %5.3f -- Var:%5.3f -- Des. Padrão: %5.3f"% (E['media'],E['variancia'],E['desvio_padrao']))
+	print ("Diameter: Média: %5.3f -- Var:%5.3f -- Des. Padrão: %5.3f"% (D['media'],D['variancia'],D['desvio_padrao']))
+	print ("Betweenness Centr Nodes: Média: %5.3f -- Var:%5.3f -- Des. Padrão: %5.3f"% (BC_N['media'],BC_N['variancia'],BC_N['desvio_padrao']))
+	print ("Betweenness Centr Edges: Média: %5.3f -- Var:%5.3f -- Des. Padrão: %5.3f"% (BC_E['media'],BC_E['variancia'],BC_E['desvio_padrao']))
 	print("\n######################################################################\n")
 
-#		for NI in G.Nodes():
-			#NI.GetOutDeg(), NI.GetInDeg())			#"out-degree - in-degree
-			#NI.GetId())						#"node id - 
-	
 
-	
 
-#Nodes	81306
-#Edges	1768149
-#Nodes in largest WCC	81306 (1.000)
-#Edges in largest WCC	1768149 (1.000)
-#Nodes in largest SCC	68413 (0.841)
-#Edges in largest SCC	1685163 (0.953)
+
 #Average clustering coefficient	0.5653
 #Number of triangles	13082506
 #Fraction of closed triangles	0.06415
@@ -138,19 +125,39 @@ def main():
 			
 	print
 	op = int(raw_input("Escolha uma opção acima: "))
+
+
+	if op in (5,6,7,8,10):																						# Testar se é um grafo direcionado ou não
+		isdir = False
+	else:
+		isdir = True
+
 	net = "n"+str(op)	
+
+######################################################################		
+######################################################################
 	dataset_dir = "/home/amaury/graphs/"+str(net)+"/graphs_with_ego/"								############### Arquivo contendo arquivos com a lista de arestas das redes-ego
 	dataset_dir = "/home/amaury/snappy/twitter/edges/"								#Testes... REMOVER DEPOIS!
 
 	if not os.path.isdir(dataset_dir):
 		print("Diretório dos grafos não encontrado: "+str(dataset_dir))
-		print("Saindo...")
-		sys.exit()
 	else:
 		output_dir = "/home/amaury/Dropbox/properties/"+str(net)+"/graphs_with_ego/"
 		if not os.path.exists(output_dir):
-			os.makedirs(output_dir)	
-		statistics(dataset_dir,output_dir,net)	
+			os.makedirs(output_dir)
+		statistics(dataset_dir,output_dir,net,isdir)														# Inicia os cálculos...				
+######################################################################		
+######################################################################
+#	dataset_dir2 = "/home/amaury/graphs/"+str(net)+"/graphs_without_ego/"						############### Arquivo contendo arquivos com a lista de arestas das redes-ego
+#	if not os.path.isdir(dataset_dir2):
+#		print("Diretório dos grafos não encontrado: "+str(dataset_dir2))
+#	else:
+#		output_dir2 = "/home/amaury/Dropbox/properties/"+str(net)+"/graphs_with_ego/"
+#		if not os.path.exists(output_dir):
+#			os.makedirs(output_dir)
+#		statistics(dataset_dir2,output_dir2,net,isdir)													# Inicia os cálculos...	
+######################################################################
+######################################################################		
 
 	print("\n######################################################################\n")
 	print("Script finalizado!")
